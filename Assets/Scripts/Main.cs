@@ -1,19 +1,39 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
+using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using Random = UnityEngine.Random;
+
 
 public class Team
 {
-    public string RoomNumber { get; set; }
+    public int  RoomNumber { get; set; }
     public int teamId { get; set; }
+    public int ScoreRoom { get; set; }
+    public int ScoreAll { get; set; }
+}
+
+public class Room
+{
+    public int RoomTime;
+    
 }
 public class Main : MonoBehaviour
 {
-
+    private Room _currentRoom;
+    public Text RoomTimer;
+    public Text Score;
     string qrString = "";
     bool background = true;
     private Team t = new Team();
+    private int lastTime;
 
+    public void IncScore()
+    {
+        Score.text = (Int32.Parse(Score.text) + 1).ToString();
+    }
     void Start()
     {
         AndroidNFCReader.enableBackgroundScan();
@@ -27,22 +47,58 @@ public class Main : MonoBehaviour
             t.teamId = Random.Range(0, 333);
         }
         PlayerPrefs.SetInt("teamId",t.teamId);
-        t.RoomNumber ="0";
-        string url = "http://127.168.0.151:8080/";
+        t.RoomNumber =0;
+        string url = "http://192.168.0.151:8000/";
         
         WWWForm form = new WWWForm();
         form.AddField("", t.RoomNumber);
         form.AddField("", t.teamId);
         byte[] rawData = form.data;
-        //headers.Add("User-Agent", "ceilometerclient.openstack.common.apiclient");
+        var headers = new Dictionary<string, string>();
+
+        headers.Add("Stage", "TeamCreation");
         // headers.Add("X-Auth-Token", "7da4596d42e24f9798d73ec40bbbbd81");
 
         Debug.Log("opj");
-        WWW www = new WWW(url, rawData);
+        WWW www = new WWW(url, rawData,headers);
 
         StartCoroutine(WaitForRequest(www));
     }
 
+    void Update()
+    {
+        if (_currentRoom!=null)
+        {
+            if (_currentRoom.RoomTime > 0)
+            {
+                _currentRoom.RoomTime -= ((int)Time.time - lastTime)* 1000;
+                lastTime = (int) Time.time;
+                RoomTimer.text = (_currentRoom.RoomTime / 1000).ToString();
+                if (_currentRoom.RoomTime <= 0)
+                {
+                    string url = "http://192.168.0.151:8000/";
+                    Debug.Log("RoomFinished localy");
+                    WWWForm form = new WWWForm();
+                    t.ScoreRoom = int.Parse(Score.text);
+                    form.AddField("", t.teamId);
+
+                    byte[] rawData = form.data;
+                    var headers = new Dictionary<string, string>();
+                    
+                    headers.Add("Stage", "RoomFinished");
+                    headers.Add("RoomScore",t.ScoreRoom.ToString());
+                    headers.Add("TeamId",t.teamId.ToString());
+                    headers.Add("RoomNumber", t.RoomNumber.ToString());
+
+                    // headers.Add("X-Auth-Token", "7da4596d42e24f9798d73ec40bbbbd81");
+
+                    WWW www = new WWW(url, rawData, headers);
+                    StartCoroutine(WaitForRequest(www));
+
+                }
+            }
+        }
+    }
     IEnumerator WaitForRequest(WWW www)
     {
         yield return www;
@@ -51,6 +107,14 @@ public class Main : MonoBehaviour
         if (www.error == null)
         {
             Debug.Log("WWW Ok!: " + www.data);
+            
+            var temp =JsonUtility.FromJson<Room>(www.data);
+            if (temp != null)
+            {
+                _currentRoom = temp;
+                RoomTimer.text = (_currentRoom.RoomTime/1000).ToString();
+            }
+
         }
         else
         {
@@ -81,21 +145,25 @@ public class Main : MonoBehaviour
                 background = false;
             }
         }
-        Debug.Log(qrString);
-        GUI.Label(new Rect(0, 0, Screen.width, 50), "Result: " + qrString+"new Version");
-        if (qrString.Length < 3)
+        if (qrString != "NO_ALLOWED_OS")
         {
-            string url = "http://127.168.0.151:8080/";
-            t.RoomNumber = qrString;
-            WWWForm form = new WWWForm();
-            form.AddField("", t.RoomNumber);
-            form.AddField("", t.teamId);
-            byte[] rawData = form.data;
-            var headers = new Dictionary<string, string>();
+            Debug.Log(qrString);
+            GUI.Label(new Rect(0, 0, Screen.width, 50), "Result: " + qrString + "new Version");
+            if (qrString.Length < 3)
+            {
+                string url = "http://192.168.0.151:8000/";
+                t.RoomNumber = Int32.Parse(qrString);
+                WWWForm form = new WWWForm();
+                form.AddField("", t.RoomNumber);
+                form.AddField("", t.teamId);
+                byte[] rawData = form.data;
+                var headers = new Dictionary<string, string>();
+                headers.Add("Stage", "RoomEntery");
 
-            WWW www = new WWW(url, rawData, headers);
+                WWW www = new WWW(url, rawData, headers);
 
-            StartCoroutine(WaitForRequest(www));
+                StartCoroutine(WaitForRequest(www));
+            }
         }
     }
 

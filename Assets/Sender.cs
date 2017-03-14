@@ -11,8 +11,8 @@ public class Sender : MonoBehaviour
     void Start()
     {
         t.teamId = 439243;
-        t.RoomNumber = 0.ToString();
-        string url = "http://127.168.0.151:8000/";
+        t.RoomNumber = 0;
+        string url = "http://192.168.0.151:8000/";
 
         WWWForm form = new WWWForm();
         form.AddField("",t.RoomNumber);
